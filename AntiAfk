@@ -1,8 +1,78 @@
--- Anti AFK Script
+local Players = game:GetService("Players")
 local VirtualUser = game:GetService("VirtualUser")
+local player = Players.LocalPlayer
 
-game:GetService("Players").LocalPlayer.Idled:Connect(function()
-    VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-    task.wait(1)
-    VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+-- GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player.PlayerGui
+
+-- Frame
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 200, 0, 90)
+frame.Position = UDim2.new(0, 15, 1, -110)
+frame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+frame.BackgroundTransparency = 0.35
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
+
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(100, 100, 100)
+stroke.Thickness = 1.5
+stroke.Parent = frame
+
+-- Label trạng thái AFK
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -10, 0, 40)
+statusLabel.Position = UDim2.new(0, 5, 0, 5)
+statusLabel.BackgroundTransparency = 1
+statusLabel.TextScaled = true
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.Text = "Đang hoạt động"
+statusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Parent = frame
+
+-- Nút bật tắt
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(1, -10, 0, 35)
+toggleBtn.Position = UDim2.new(0, 5, 0, 50)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 80)
+toggleBtn.BorderSizePixel = 0
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextScaled = true
+toggleBtn.Text = "Anti AFK: BAT"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Parent = frame
+
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 8)
+
+-- Logic
+local enabled = true
+
+toggleBtn.MouseButton1Click:Connect(function()
+    enabled = not enabled
+    if enabled then
+        toggleBtn.Text = "Anti AFK: BAT"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 80)
+    else
+        toggleBtn.Text = "Anti AFK: TAT"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    end
+end)
+
+player.Idled:Connect(function()
+    statusLabel.Text = "Dang AFK!"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+
+    if enabled then
+        VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        task.wait(1)
+        VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        task.wait(1)
+        statusLabel.Text = "Dang hoat dong"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+    end
 end)
