@@ -1,78 +1,230 @@
+--[[
+    Macro Recorder/Player GUI
+    - Ghi lại đường di chuyển (CFrame) + thời gian
+    - Lặp lại (replay) theo đúng lộ trình đã ghi, có thể loop vô hạn
+    - GUI mobile-friendly: Record / Stop / Play / Loop
+--]]
+
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
+
 local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- GUI
+-- ===== State =====
+local recording = false
+local playing = false
+local looping = false
+local antiAfk = false
+local guiOpen = true
+local loopDelay = 0 -- giây nghỉ giữa mỗi lần lặp lại
+local recordedPath = {} -- {time = t, cframe = cf}
+local recordStart = 0
+local connRecord, connPlay, connAfk
+
+-- ===== GUI =====
 local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MacroRecorderGUI"
 screenGui.ResetOnSpawn = false
-screenGui.Parent = player.PlayerGui
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Frame
+-- Thử parent vào CoreGui trước (ổn định hơn trên nhiều executor),
+-- nếu không được thì fallback về PlayerGui
+local parented = false
+pcall(function()
+    screenGui.Parent = game:GetService("CoreGui")
+    parented = true
+end)
+if not parented then
+    screenGui.Parent = player:WaitForChild("PlayerGui")
+end
+print("[MacroRecorder] GUI parent OK ->", screenGui.Parent)
+
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 200, 0, 90)
-frame.Position = UDim2.new(0, 15, 1, -110)
-frame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-frame.BackgroundTransparency = 0.35
-frame.BorderSizePixel = 0
+frame.Size = UDim2.new(0, 160, 0, 230)
+frame.Position = UDim2.new(0, 20, 0.4, 0)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BackgroundTransparency = 0.15
+frame.Active = true
+frame.Draggable = true -- kéo được trên mobile
 frame.Parent = screenGui
 
-Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = frame
 
-local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(100, 100, 100)
-stroke.Thickness = 1.5
-stroke.Parent = frame
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 6)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+layout.Parent = frame
 
--- Label trạng thái AFK
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(1, -10, 0, 40)
-statusLabel.Position = UDim2.new(0, 5, 0, 5)
-statusLabel.BackgroundTransparency = 1
-statusLabel.TextScaled = true
-statusLabel.Font = Enum.Font.GothamBold
-statusLabel.Text = "Đang hoạt động"
-statusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
-statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-statusLabel.Parent = frame
+local padding = Instance.new("UIPadding")
+padding.PaddingTop = UDim.new(0, 8)
+padding.Parent = frame
 
--- Nút bật tắt
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 24)
+title.BackgroundTransparency = 1
+title.Text = "Macro Recorder"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.Parent = frame
+
+local function makeButton(text, color)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.85, 0, 0, 34)
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.TextScaled = true
+    btn.Font = Enum.Font.Gotham
+    btn.Parent = frame
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 8)
+    c.Parent = btn
+    return btn
+end
+
+local recordBtn = makeButton("● Record", Color3.fromRGB(200, 50, 50))
+local stopBtn   = makeButton("■ Stop", Color3.fromRGB(90, 90, 90))
+local playBtn   = makeButton("▶ Play", Color3.fromRGB(50, 160, 80))
+local loopBtn   = makeButton("Loop: OFF", Color3.fromRGB(60, 100, 200))
+local afkBtn    = makeButton("Anti-AFK: OFF", Color3.fromRGB(150, 100, 40))
+
+local delayBox = Instance.new("TextBox")
+delayBox.Size = UDim2.new(0.85, 0, 0, 30)
+delayBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+delayBox.Text = "0"
+delayBox.PlaceholderText = "Thời gian nghỉ (giây)"
+delayBox.TextColor3 = Color3.new(1, 1, 1)
+delayBox.TextScaled = true
+delayBox.ClearTextOnFocus = false
+delayBox.Font = Enum.Font.Gotham
+delayBox.Parent = frame
+local delayCorner = Instance.new("UICorner")
+delayCorner.CornerRadius = UDim.new(0, 8)
+delayCorner.Parent = delayBox
+
+delayBox.FocusLost:Connect(function()
+    local n = tonumber(delayBox.Text)
+    loopDelay = n and math.max(n, 0) or 0
+    delayBox.Text = tostring(loopDelay)
+end)
+
+-- Nút nổi để đóng/mở toàn bộ GUI, luôn hiển thị kể cả khi frame bị ẩn
 local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size = UDim2.new(1, -10, 0, 35)
-toggleBtn.Position = UDim2.new(0, 5, 0, 50)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 80)
-toggleBtn.BorderSizePixel = 0
-toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.Size = UDim2.new(0, 46, 0, 46)
+toggleBtn.Position = UDim2.new(0, 20, 0.32, 0)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 160, 80) -- xanh = đang mở
+toggleBtn.Text = "ON"
+toggleBtn.TextColor3 = Color3.new(1, 1, 1)
 toggleBtn.TextScaled = true
-toggleBtn.Text = "Anti AFK: BAT"
-toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleBtn.Parent = frame
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.Active = true
+toggleBtn.Draggable = true
+toggleBtn.Parent = screenGui
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(1, 0)
+toggleCorner.Parent = toggleBtn
 
-Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 8)
+-- ===== Functions =====
+local function stopAll()
+    recording = false
+    playing = false
+    if connRecord then connRecord:Disconnect() connRecord = nil end
+    if connPlay then connPlay:Disconnect() connPlay = nil end
+    humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
+end
 
--- Logic
-local enabled = true
+local function startRecord()
+    stopAll()
+    recordedPath = {}
+    recording = true
+    recordStart = tick()
+
+    connRecord = RunService.Heartbeat:Connect(function()
+        if not recording then return end
+        table.insert(recordedPath, {
+            time = tick() - recordStart,
+            cframe = rootPart.CFrame
+        })
+    end)
+end
+
+local function playPath()
+    if #recordedPath < 2 then return end
+    stopAll()
+    playing = true
+
+    task.spawn(function()
+        repeat
+            local startTime = tick()
+            local index = 1
+            while playing and index <= #recordedPath do
+                local elapsed = tick() - startTime
+                local point = recordedPath[index]
+                if elapsed >= point.time then
+                    rootPart.CFrame = point.cframe
+                    index = index + 1
+                end
+                RunService.Heartbeat:Wait()
+            end
+            if looping and playing and loopDelay > 0 then
+                task.wait(loopDelay)
+            end
+        until not looping or not playing
+        playing = false
+    end)
+end
+
+-- ===== Button events =====
+recordBtn.MouseButton1Click:Connect(startRecord)
+
+stopBtn.MouseButton1Click:Connect(function()
+    stopAll()
+end)
+
+playBtn.MouseButton1Click:Connect(playPath)
+
+loopBtn.MouseButton1Click:Connect(function()
+    looping = not looping
+    loopBtn.Text = looping and "Loop: ON" or "Loop: OFF"
+end)
+
+afkBtn.MouseButton1Click:Connect(function()
+    antiAfk = not antiAfk
+    afkBtn.Text = antiAfk and "Anti-AFK: ON" or "Anti-AFK: OFF"
+
+    if antiAfk then
+        connAfk = player.Idled:Connect(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end)
+    else
+        if connAfk then connAfk:Disconnect() connAfk = nil end
+    end
+end)
 
 toggleBtn.MouseButton1Click:Connect(function()
-    enabled = not enabled
-    if enabled then
-        toggleBtn.Text = "Anti AFK: BAT"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 80)
-    else
-        toggleBtn.Text = "Anti AFK: TAT"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    end
+    guiOpen = not guiOpen
+    frame.Visible = guiOpen
+    toggleBtn.Text = guiOpen and "ON" or "OFF"
+    toggleBtn.BackgroundColor3 = guiOpen
+        and Color3.fromRGB(50, 160, 80)   -- xanh = mở
+        or Color3.fromRGB(150, 50, 50)    -- đỏ = đóng
 end)
 
-player.Idled:Connect(function()
-    statusLabel.Text = "Dang AFK!"
-    statusLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-
-    if enabled then
-        VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-        task.wait(1)
-        VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-        task.wait(1)
-        statusLabel.Text = "Dang hoat dong"
-        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
-    end
+-- Reset khi respawn
+player.CharacterAdded:Connect(function(char)
+    character = char
+    humanoid = char:WaitForChild("Humanoid")
+    rootPart = char:WaitForChild("HumanoidRootPart")
 end)
+
+print("[MacroRecorder] Script loaded thành công. Nếu không thấy GUI, kiểm tra console lỗi hoặc thử đổi executor.")
