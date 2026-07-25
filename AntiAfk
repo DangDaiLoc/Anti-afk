@@ -1,14 +1,14 @@
 --[[
-    Macro Recorder/Player GUI
-    - Ghi lại đường di chuyển (CFrame) + thời gian
-    - Lặp lại (replay) theo đúng lộ trình đã ghi, có thể loop vô hạn
-    - GUI mobile-friendly: Record / Stop / Play / Loop
+    Macro Hub GUI (kiểu sidebar giống các hub phổ biến)
+    - Ghi lại đường di chuyển (CFrame) + thời gian, lặp lại (replay)
+    - Anti-AFK, thời gian nghỉ giữa các lần lặp
+    - Giao diện: thanh bên trái chọn tab, toggle switch bo tròn, kéo di chuyển được
 --]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
+local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
@@ -16,25 +16,30 @@ local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
 -- ===== State =====
-local recording = false
-local playing = false
-local looping = false
-local antiAfk = false
+local recording, playing, looping, antiAfk = false, false, false, false
 local guiOpen = true
-local loopDelay = 0 -- giây nghỉ giữa mỗi lần lặp lại
-local recordedPath = {} -- {time = t, cframe = cf}
+local loopDelay = 0
+local recordedPath = {}
 local recordStart = 0
 local connRecord, connPlay, connAfk
 
--- ===== GUI =====
+-- ===== Theme =====
+local THEME = {
+    bg        = Color3.fromRGB(24, 24, 28),
+    sidebar   = Color3.fromRGB(18, 18, 22),
+    panel     = Color3.fromRGB(30, 30, 35),
+    accent    = Color3.fromRGB(90, 120, 255),
+    accentOff = Color3.fromRGB(55, 55, 62),
+    text      = Color3.fromRGB(235, 235, 240),
+    subtext   = Color3.fromRGB(150, 150, 160),
+}
+
+-- ===== Root GUI =====
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "MacroRecorderGUI"
+screenGui.Name = "MacroHubGUI"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
-screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Thử parent vào CoreGui trước (ổn định hơn trên nhiều executor),
--- nếu không được thì fallback về PlayerGui
 local parented = false
 pcall(function()
     screenGui.Parent = game:GetService("CoreGui")
@@ -43,103 +48,239 @@ end)
 if not parented then
     screenGui.Parent = player:WaitForChild("PlayerGui")
 end
-print("[MacroRecorder] GUI parent OK ->", screenGui.Parent)
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 160, 0, 230)
-frame.Position = UDim2.new(0, 20, 0.4, 0)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-frame.BackgroundTransparency = 0.15
-frame.Active = true
-frame.Draggable = true -- kéo được trên mobile
-frame.Parent = screenGui
+-- Main window
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 380, 0, 260)
+main.Position = UDim2.new(0.5, -190, 0.5, -130)
+main.BackgroundColor3 = THEME.bg
+main.Active = true
+main.Parent = screenGui
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 10)
-corner.Parent = frame
+-- Top bar (kéo thả tại đây)
+local topBar = Instance.new("Frame")
+topBar.Size = UDim2.new(1, 0, 0, 34)
+topBar.BackgroundColor3 = THEME.sidebar
+topBar.Parent = main
+Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 10)
 
-local layout = Instance.new("UIListLayout")
-layout.Padding = UDim.new(0, 6)
-layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-layout.Parent = frame
+local titleLbl = Instance.new("TextLabel")
+titleLbl.Size = UDim2.new(1, -80, 1, 0)
+titleLbl.Position = UDim2.new(0, 12, 0, 0)
+titleLbl.BackgroundTransparency = 1
+titleLbl.Text = "Macro Hub"
+titleLbl.TextColor3 = THEME.text
+titleLbl.Font = Enum.Font.GothamBold
+titleLbl.TextSize = 16
+titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+titleLbl.Parent = topBar
 
-local padding = Instance.new("UIPadding")
-padding.PaddingTop = UDim.new(0, 8)
-padding.Parent = frame
+-- Kéo thả bằng Drag trên topBar
+do
+    local dragging, dragStart, startPos
+    local UIS = game:GetService("UserInputService")
+    topBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = main.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
 
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 24)
-title.BackgroundTransparency = 1
-title.Text = "Macro Recorder"
-title.TextColor3 = Color3.new(1, 1, 1)
-title.TextScaled = true
-title.Font = Enum.Font.GothamBold
-title.Parent = frame
+-- Nút đóng cửa sổ (ẩn main, hiện nút nổi để mở lại)
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 26, 0, 26)
+closeBtn.Position = UDim2.new(1, -32, 0, 4)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.new(1, 1, 1)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 14
+closeBtn.Parent = topBar
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
 
-local function makeButton(text, color)
+-- Nút nổi mở lại khi đóng
+local reopenBtn = Instance.new("TextButton")
+reopenBtn.Size = UDim2.new(0, 46, 0, 46)
+reopenBtn.Position = UDim2.new(0, 20, 0.32, 0)
+reopenBtn.BackgroundColor3 = THEME.accent
+reopenBtn.Text = "ON"
+reopenBtn.TextColor3 = Color3.new(1, 1, 1)
+reopenBtn.Font = Enum.Font.GothamBold
+reopenBtn.TextSize = 14
+reopenBtn.Visible = false
+reopenBtn.Active = true
+reopenBtn.Draggable = true
+reopenBtn.Parent = screenGui
+Instance.new("UICorner", reopenBtn).CornerRadius = UDim.new(1, 0)
+
+local function setOpen(state)
+    guiOpen = state
+    main.Visible = state
+    reopenBtn.Visible = not state
+end
+
+closeBtn.MouseButton1Click:Connect(function() setOpen(false) end)
+reopenBtn.MouseButton1Click:Connect(function() setOpen(true) end)
+
+-- ===== Sidebar =====
+local sidebar = Instance.new("Frame")
+sidebar.Size = UDim2.new(0, 110, 1, -34)
+sidebar.Position = UDim2.new(0, 0, 0, 34)
+sidebar.BackgroundColor3 = THEME.sidebar
+sidebar.Parent = main
+
+local sideLayout = Instance.new("UIListLayout")
+sideLayout.Padding = UDim.new(0, 4)
+sideLayout.Parent = sidebar
+local sidePad = Instance.new("UIPadding")
+sidePad.PaddingTop = UDim.new(0, 8)
+sidePad.Parent = sidebar
+
+-- ===== Content area (đổi theo tab) =====
+local content = Instance.new("Frame")
+content.Size = UDim2.new(1, -110, 1, -34)
+content.Position = UDim2.new(0, 110, 0, 34)
+content.BackgroundColor3 = THEME.bg
+content.Parent = main
+
+local pages = {} -- name -> frame
+
+local function newPage(name)
+    local page = Instance.new("Frame")
+    page.Size = UDim2.new(1, 0, 1, 0)
+    page.BackgroundTransparency = 1
+    page.Visible = false
+    page.Parent = content
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 8)
+    layout.Parent = page
+    local pad = Instance.new("UIPadding")
+    pad.PaddingTop = UDim.new(0, 12)
+    pad.PaddingLeft = UDim.new(0, 12)
+    pad.PaddingRight = UDim.new(0, 12)
+    pad.Parent = page
+    pages[name] = page
+    return page
+end
+
+local function showPage(name)
+    for n, p in pairs(pages) do
+        p.Visible = (n == name)
+    end
+end
+
+-- Tab button trong sidebar
+local tabButtons = {}
+local function addTab(name)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.85, 0, 0, 34)
-    btn.BackgroundColor3 = color
-    btn.Text = text
-    btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.TextScaled = true
+    btn.Size = UDim2.new(1, -12, 0, 32)
+    btn.Position = UDim2.new(0, 6, 0, 0)
+    btn.BackgroundColor3 = THEME.panel
+    btn.Text = name
+    btn.TextColor3 = THEME.subtext
     btn.Font = Enum.Font.Gotham
-    btn.Parent = frame
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 8)
-    c.Parent = btn
+    btn.TextSize = 13
+    btn.Parent = sidebar
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+    btn.MouseButton1Click:Connect(function()
+        showPage(name)
+        for _, b in pairs(tabButtons) do
+            b.BackgroundColor3 = THEME.panel
+            b.TextColor3 = THEME.subtext
+        end
+        btn.BackgroundColor3 = THEME.accent
+        btn.TextColor3 = THEME.text
+    end)
+
+    tabButtons[name] = btn
     return btn
 end
 
-local recordBtn = makeButton("● Record", Color3.fromRGB(200, 50, 50))
-local stopBtn   = makeButton("■ Stop", Color3.fromRGB(90, 90, 90))
-local playBtn   = makeButton("▶ Play", Color3.fromRGB(50, 160, 80))
-local loopBtn   = makeButton("Loop: OFF", Color3.fromRGB(60, 100, 200))
-local afkBtn    = makeButton("Anti-AFK: OFF", Color3.fromRGB(150, 100, 40))
+-- Hàng có label + toggle switch bo tròn (giống ảnh mẫu)
+local function addToggleRow(page, label, default, onChanged)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, 0, 0, 34)
+    row.BackgroundColor3 = THEME.panel
+    row.Parent = page
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
 
-local delayBox = Instance.new("TextBox")
-delayBox.Size = UDim2.new(0.85, 0, 0, 30)
-delayBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-delayBox.Text = "0"
-delayBox.PlaceholderText = "Thời gian nghỉ (giây)"
-delayBox.TextColor3 = Color3.new(1, 1, 1)
-delayBox.TextScaled = true
-delayBox.ClearTextOnFocus = false
-delayBox.Font = Enum.Font.Gotham
-delayBox.Parent = frame
-local delayCorner = Instance.new("UICorner")
-delayCorner.CornerRadius = UDim.new(0, 8)
-delayCorner.Parent = delayBox
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -60, 1, 0)
+    lbl.Position = UDim2.new(0, 10, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = label
+    lbl.TextColor3 = THEME.text
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 13
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = row
 
-delayBox.FocusLost:Connect(function()
-    local n = tonumber(delayBox.Text)
-    loopDelay = n and math.max(n, 0) or 0
-    delayBox.Text = tostring(loopDelay)
-end)
+    local switchBg = Instance.new("TextButton")
+    switchBg.Size = UDim2.new(0, 40, 0, 20)
+    switchBg.Position = UDim2.new(1, -50, 0.5, -10)
+    switchBg.BackgroundColor3 = default and THEME.accent or THEME.accentOff
+    switchBg.Text = ""
+    switchBg.Parent = row
+    Instance.new("UICorner", switchBg).CornerRadius = UDim.new(1, 0)
 
--- Nút nổi để đóng/mở toàn bộ GUI, luôn hiển thị kể cả khi frame bị ẩn
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size = UDim2.new(0, 46, 0, 46)
-toggleBtn.Position = UDim2.new(0, 20, 0.32, 0)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 160, 80) -- xanh = đang mở
-toggleBtn.Text = "ON"
-toggleBtn.TextColor3 = Color3.new(1, 1, 1)
-toggleBtn.TextScaled = true
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.Active = true
-toggleBtn.Draggable = true
-toggleBtn.Parent = screenGui
-local toggleCorner = Instance.new("UICorner")
-toggleCorner.CornerRadius = UDim.new(1, 0)
-toggleCorner.Parent = toggleBtn
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 16, 0, 16)
+    knob.Position = default and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    knob.BackgroundColor3 = Color3.new(1, 1, 1)
+    knob.Parent = switchBg
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
 
--- ===== Functions =====
+    local state = default
+    switchBg.MouseButton1Click:Connect(function()
+        state = not state
+        TweenService:Create(switchBg, TweenInfo.new(0.15), {
+            BackgroundColor3 = state and THEME.accent or THEME.accentOff
+        }):Play()
+        TweenService:Create(knob, TweenInfo.new(0.15), {
+            Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        }):Play()
+        onChanged(state)
+    end)
+
+    return row
+end
+
+-- Hàng nút bấm thường (Record/Play/Stop)
+local function addButtonRow(page, label, color, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 34)
+    btn.BackgroundColor3 = color
+    btn.Text = label
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 13
+    btn.Parent = page
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    btn.MouseButton1Click:Connect(callback)
+    return btn
+end
+
+-- ===== Functions macro =====
 local function stopAll()
     recording = false
     playing = false
     if connRecord then connRecord:Disconnect() connRecord = nil end
     if connPlay then connPlay:Disconnect() connPlay = nil end
-    humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
 end
 
 local function startRecord()
@@ -147,13 +288,9 @@ local function startRecord()
     recordedPath = {}
     recording = true
     recordStart = tick()
-
     connRecord = RunService.Heartbeat:Connect(function()
         if not recording then return end
-        table.insert(recordedPath, {
-            time = tick() - recordStart,
-            cframe = rootPart.CFrame
-        })
+        table.insert(recordedPath, { time = tick() - recordStart, cframe = rootPart.CFrame })
     end)
 end
 
@@ -161,7 +298,6 @@ local function playPath()
     if #recordedPath < 2 then return end
     stopAll()
     playing = true
-
     task.spawn(function()
         repeat
             local startTime = tick()
@@ -183,24 +319,21 @@ local function playPath()
     end)
 end
 
--- ===== Button events =====
-recordBtn.MouseButton1Click:Connect(startRecord)
+-- ===== Build Tabs =====
+addTab("Macro")
+addTab("Cài đặt")
 
-stopBtn.MouseButton1Click:Connect(function()
-    stopAll()
+local macroPage = newPage("Macro")
+addButtonRow(macroPage, "● Record", Color3.fromRGB(200, 50, 50), startRecord)
+addButtonRow(macroPage, "■ Stop", Color3.fromRGB(90, 90, 90), stopAll)
+addButtonRow(macroPage, "▶ Play", Color3.fromRGB(50, 160, 80), playPath)
+addToggleRow(macroPage, "Loop (lặp vô hạn)", false, function(state)
+    looping = state
 end)
 
-playBtn.MouseButton1Click:Connect(playPath)
-
-loopBtn.MouseButton1Click:Connect(function()
-    looping = not looping
-    loopBtn.Text = looping and "Loop: ON" or "Loop: OFF"
-end)
-
-afkBtn.MouseButton1Click:Connect(function()
-    antiAfk = not antiAfk
-    afkBtn.Text = antiAfk and "Anti-AFK: ON" or "Anti-AFK: OFF"
-
+local settingsPage = newPage("Cài đặt")
+addToggleRow(settingsPage, "Anti-AFK", false, function(state)
+    antiAfk = state
     if antiAfk then
         connAfk = player.Idled:Connect(function()
             VirtualUser:CaptureController()
@@ -211,14 +344,44 @@ afkBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-toggleBtn.MouseButton1Click:Connect(function()
-    guiOpen = not guiOpen
-    frame.Visible = guiOpen
-    toggleBtn.Text = guiOpen and "ON" or "OFF"
-    toggleBtn.BackgroundColor3 = guiOpen
-        and Color3.fromRGB(50, 160, 80)   -- xanh = mở
-        or Color3.fromRGB(150, 50, 50)    -- đỏ = đóng
+local delayRow = Instance.new("Frame")
+delayRow.Size = UDim2.new(1, 0, 0, 34)
+delayRow.BackgroundColor3 = THEME.panel
+delayRow.Parent = settingsPage
+Instance.new("UICorner", delayRow).CornerRadius = UDim.new(0, 6)
+
+local delayLbl = Instance.new("TextLabel")
+delayLbl.Size = UDim2.new(0.55, 0, 1, 0)
+delayLbl.Position = UDim2.new(0, 10, 0, 0)
+delayLbl.BackgroundTransparency = 1
+delayLbl.Text = "Nghỉ giữa lần lặp (s)"
+delayLbl.TextColor3 = THEME.text
+delayLbl.Font = Enum.Font.Gotham
+delayLbl.TextSize = 12
+delayLbl.TextXAlignment = Enum.TextXAlignment.Left
+delayLbl.Parent = delayRow
+
+local delayBox = Instance.new("TextBox")
+delayBox.Size = UDim2.new(0.35, 0, 0, 24)
+delayBox.Position = UDim2.new(1, -110, 0.5, -12)
+delayBox.BackgroundColor3 = THEME.accentOff
+delayBox.Text = "0"
+delayBox.TextColor3 = THEME.text
+delayBox.Font = Enum.Font.Gotham
+delayBox.TextSize = 12
+delayBox.ClearTextOnFocus = false
+delayBox.Parent = delayRow
+Instance.new("UICorner", delayBox).CornerRadius = UDim.new(0, 6)
+
+delayBox.FocusLost:Connect(function()
+    local n = tonumber(delayBox.Text)
+    loopDelay = n and math.max(n, 0) or 0
+    delayBox.Text = tostring(loopDelay)
 end)
+
+showPage("Macro")
+tabButtons["Macro"].BackgroundColor3 = THEME.accent
+tabButtons["Macro"].TextColor3 = THEME.text
 
 -- Reset khi respawn
 player.CharacterAdded:Connect(function(char)
@@ -227,4 +390,4 @@ player.CharacterAdded:Connect(function(char)
     rootPart = char:WaitForChild("HumanoidRootPart")
 end)
 
-print("[MacroRecorder] Script loaded thành công. Nếu không thấy GUI, kiểm tra console lỗi hoặc thử đổi executor.")
+print("[MacroHub] Đã load xong. Nếu không thấy GUI, kiểm tra console lỗi.")
