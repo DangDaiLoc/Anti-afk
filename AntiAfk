@@ -1,7 +1,8 @@
 --[[
     Macro Hub GUI (kiểu sidebar giống các hub phổ biến)
-    - Ghi lại đường di chuyển (CFrame) + thời gian, lặp lại (replay)
+    - Ghi lại đường di chuyển (CFrame) + thao tác chạm/bấm nút, lặp lại (replay)
     - Anti-AFK, thời gian nghỉ giữa các lần lặp
+    - Đã fix giật khi Play: khóa WalkSpeed + xóa vận tốc dư khi ghi đè CFrame
     - Giao diện: thanh bên trái chọn tab, toggle switch bo tròn, kéo di chuyển được
 --]]
 
@@ -9,11 +10,14 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
+local originalWalkSpeed = humanoid.WalkSpeed
 
 -- ===== State =====
 local recording, playing, looping, antiAfk = false, false, false, false
@@ -21,7 +25,7 @@ local guiOpen = true
 local loopDelay = 0
 local recordedPath = {}
 local recordStart = 0
-local connRecord, connPlay, connAfk
+local connRecord, connPlay, connAfk, connTap
 
 -- ===== Theme =====
 local THEME = {
@@ -275,12 +279,25 @@ local function addButtonRow(page, label, color, callback)
     return btn
 end
 
+-- Kiểm tra 1 vị trí chạm có đang nằm trên GUI của Macro Hub không (để không tự ghi lại việc bấm nút hub)
+local function isOnHubGui(pos)
+    local guiObjects = player.PlayerGui:GetGuiObjectsAtPosition(pos.X, pos.Y)
+    for _, obj in ipairs(guiObjects) do
+        if obj:IsDescendantOf(main) or obj:IsDescendantOf(reopenBtn) then
+            return true
+        end
+    end
+    return false
+end
+
 -- ===== Functions macro =====
 local function stopAll()
     recording = false
     playing = false
     if connRecord then connRecord:Disconnect() connRecord = nil end
     if connPlay then connPlay:Disconnect() connPlay = nil end
+    if connTap then connTap:Disconnect() connTap = nil end
+    humanoid.WalkSpeed = originalWalkSpeed
 end
 
 local function startRecord()
@@ -288,9 +305,24 @@ local function startRecord()
     recordedPath = {}
     recording = true
     recordStart = tick()
+
+    -- Ghi di chuyển
     connRecord = RunService.Heartbeat:Connect(function()
         if not recording then return end
-        table.insert(recordedPath, { time = tick() - recordStart, cframe = rootPart.CFrame })
+        table.insert(recordedPath, { type = "move", time = tick() - recordStart, cframe = rootPart.CFrame })
+    end)
+
+    -- Ghi thao tác chạm / bấm nút trong game
+    connTap = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not recording then return end
+        local isTap = input.UserInputType == Enum.UserInputType.Touch
+            or input.UserInputType == Enum.UserInputType.MouseButton1
+        if not isTap then return end
+
+        local pos = Vector2.new(input.Position.X, input.Position.Y)
+        if isOnHubGui(pos) then return end -- bỏ qua nếu bấm vào GUI của Macro Hub
+
+        table.insert(recordedPath, { type = "tap", time = tick() - recordStart, position = pos })
     end)
 end
 
@@ -298,15 +330,43 @@ local function playPath()
     if #recordedPath < 2 then return end
     stopAll()
     playing = true
+    humanoid.WalkSpeed = 0 -- tránh việc điều khiển bằng joystick đè lên CFrame gây giật
+
     task.spawn(function()
+        -- Tìm điểm bắt đầu (vị trí move đầu tiên) để tp về trước khi phát
+        local startPoint
+        for _, p in ipairs(recordedPath) do
+            if p.type == "move" then
+                startPoint = p
+                break
+            end
+        end
+
         repeat
+            if startPoint then
+                rootPart.CFrame = startPoint.cframe
+                rootPart.AssemblyLinearVelocity = Vector3.zero
+                rootPart.AssemblyAngularVelocity = Vector3.zero
+                task.wait(0.1) -- đợi 1 nhịp để tp ổn định trước khi chạy tiếp
+            end
+
             local startTime = tick()
             local index = 1
             while playing and index <= #recordedPath do
                 local elapsed = tick() - startTime
                 local point = recordedPath[index]
                 if elapsed >= point.time then
-                    rootPart.CFrame = point.cframe
+                    if point.type == "move" then
+                        rootPart.CFrame = point.cframe
+                        -- Xóa vận tốc còn sót lại để tránh giật/lag khi CFrame bị ghi đè liên tục
+                        rootPart.AssemblyLinearVelocity = Vector3.zero
+                        rootPart.AssemblyAngularVelocity = Vector3.zero
+                    elseif point.type == "tap" then
+                        local camCFrame = Workspace.CurrentCamera.CFrame
+                        VirtualUser:Button1Down(point.position, camCFrame)
+                        task.wait(0.05)
+                        VirtualUser:Button1Up(point.position, camCFrame)
+                    end
                     index = index + 1
                 end
                 RunService.Heartbeat:Wait()
@@ -316,6 +376,7 @@ local function playPath()
             end
         until not looping or not playing
         playing = false
+        humanoid.WalkSpeed = originalWalkSpeed
     end)
 end
 
