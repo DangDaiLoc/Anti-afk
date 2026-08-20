@@ -1,7 +1,7 @@
---// Blox Fruits FPS Ultra MAX - Bản gọn cho Delta Executor
---// Đã xóa mục 3 & 4 (Chỉ giữ Xóa VFX và Siêu Cấp Fix Lag)
-
-local P = game:GetService("Players").LocalPlayer
+--// Blox Fruits FPS Ultra MAX + ESP Name/Distance + FPS Counter (Fixed)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local P = Players.LocalPlayer
 local PG = P:WaitForChild("PlayerGui")
 local W = game:GetService("Workspace")
 local L = game:GetService("Lighting")
@@ -10,21 +10,13 @@ local CG = game:GetService("CoreGui")
 
 local active = true
 local superFix = false
+local espActive = false
 
 -- Khởi tạo GUI an toàn Delta
 local G = Instance.new("ScreenGui")
 G.Name = "BF_SuperFixLag_Delta"
 G.ResetOnSpawn = false
-
-pcall(function()
-    if gethui then
-        G.Parent = gethui()
-    elseif CG then
-        G.Parent = CG
-    else
-        G.Parent = PG
-    end
-end)
+pcall(function() if gethui then G.Parent = gethui() elseif CG then G.Parent = CG else G.Parent = PG end end)
 
 local function corner(x, r)
     local c = Instance.new("UICorner")
@@ -32,24 +24,42 @@ local function corner(x, r)
     c.Parent = x
 end
 
--- Hệ thống kéo thả mượt
+-- Bảng FPS ở sát góc trên bên phải (Đã xóa sét & đẩy cao)
+local FPSLabel = Instance.new("TextLabel", G)
+FPSLabel.Name = "BF_FPS_Counter"
+FPSLabel.Size = UDim2.fromOffset(85, 22)
+FPSLabel.Position = UDim2.new(1, -95, 0, 2)
+FPSLabel.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+FPSLabel.BackgroundTransparency = 0.3
+FPSLabel.TextColor3 = Color3.fromRGB(0, 255, 128)
+FPSLabel.TextSize = 12
+FPSLabel.Font = Enum.Font.SourceSansBold
+FPSLabel.Text = "FPS: ..."
+corner(FPSLabel, 6)
+
+local frameCount = 0
+local lastCheck = os.clock()
+RunService.RenderStepped:Connect(function()
+    frameCount = frameCount + 1
+    local now = os.clock()
+    if now - lastCheck >= 0.5 then
+        local fps = math.floor(frameCount / (now - lastCheck))
+        FPSLabel.Text = "FPS: " .. fps
+        frameCount = 0
+        lastCheck = now
+    end
+end)
+
+-- Hệ thống kéo thả
 local function makeDraggable(gui)
     local dragging, dragInput, dragStart, startPos
     gui.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = gui.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then dragging = false end
-            end)
+            dragging = true; dragStart = input.Position; startPos = gui.Position
+            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
         end
     end)
-    gui.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
+    gui.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end end)
     UIS.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - dragStart
@@ -58,33 +68,17 @@ local function makeDraggable(gui)
     end)
 end
 
--- Nút nổi ⚡
+-- UI Menu
 local F = Instance.new("TextButton", G)
-F.Size = UDim2.fromOffset(55, 55)
-F.Position = UDim2.new(0, 15, 0.5, -27)
-F.Text = "⚡"
-F.TextSize = 26
-F.Font = Enum.Font.SourceSansBold
-F.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-F.TextColor3 = Color3.fromRGB(0, 255, 128)
-F.Active = true
-corner(F, 12)
-makeDraggable(F)
+F.Size = UDim2.fromOffset(55, 55); F.Position = UDim2.new(0, 15, 0.5, -27); F.Text = "⚡"; F.TextSize = 26; F.BackgroundColor3 = Color3.fromRGB(20, 20, 20); F.TextColor3 = Color3.fromRGB(0, 255, 128); corner(F, 12); makeDraggable(F)
 
--- Menu Chính (Đã thu gọn chiều cao còn 150px)
 local M = Instance.new("Frame", G)
-M.Size = UDim2.fromOffset(320, 150)
-M.Position = UDim2.new(0, 75, 0.5, -75)
-M.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-M.Visible = false
-M.Active = true
-corner(M, 10)
-makeDraggable(M)
+M.Size = UDim2.fromOffset(320, 195); M.Position = UDim2.new(0, 75, 0.5, -97); M.BackgroundColor3 = Color3.fromRGB(15, 15, 15); M.Visible = false; corner(M, 10); makeDraggable(M)
 
 local T = Instance.new("TextLabel", M)
 T.Size = UDim2.new(1, -45, 0, 38)
 T.Position = UDim2.fromOffset(12, 0)
-T.Text = "⚡ FIX LAG V1"
+T.Text = "⚡ FIX LAG & ESP V2"
 T.TextSize = 13
 T.Font = Enum.Font.SourceSansBold
 T.TextColor3 = Color3.fromRGB(0, 255, 150)
@@ -103,136 +97,129 @@ corner(X, 6)
 
 local function createBtn(text, y, color)
     local b = Instance.new("TextButton", M)
-    b.Size = UDim2.new(1, -16, 0, 40)
-    b.Position = UDim2.fromOffset(8, y)
-    b.Text = text
-    b.TextSize = 11
-    b.Font = Enum.Font.SourceSansBold
-    b.TextColor3 = Color3.new(1, 1, 1)
-    b.BackgroundColor3 = color or Color3.fromRGB(35, 35, 35)
-    corner(b, 6)
+    b.Size = UDim2.new(1, -16, 0, 40); b.Position = UDim2.fromOffset(8, y); b.Text = text; b.TextSize = 11; b.Font = Enum.Font.SourceSansBold; b.TextColor3 = Color3.new(1, 1, 1); b.BackgroundColor3 = color; corner(b, 6)
     return b
 end
 
-local btnNormal = createBtn("1. XÓA VFX VÕ,TRÁI,SÚNG,HAKI: BẬT", 45, Color3.fromRGB(35, 130, 60))
-local btnSuper = createBtn("2. ⚡ SIÊU CẤP FIX LAG: TẮT", 93, Color3.fromRGB(140, 40, 40))
+-- Tạo các nút bấm không có số 1, 2, 3
+local btnNormal = createBtn("XÓA VFX: BẬT", 45, Color3.fromRGB(35, 130, 60))
+local btnSuper = createBtn("SIÊU FIX LAG: TẮT", 93, Color3.fromRGB(140, 40, 40))
+local btnESP = createBtn("ESP NGƯỜI CHƠI: TẮT", 141, Color3.fromRGB(140, 40, 40))
 
--- Hàm diệt sạch VFX Võ, Trái, Súng, Haki
-local function purgeVFX(v)
-    if not active then return end
-    pcall(function()
-        if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") 
-        or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") 
-        or v:IsA("Explosion") or v:IsA("Highlight") or v:IsA("SelectionBox") then
-            v.Enabled = false
-            v:Destroy()
+-- Logic ESP Hiển Thị Tên + Khoảng Cách
+local function updatePlayerESP(plr)
+    if plr == P or not plr.Character then return end
+    local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    if espActive then
+        local bill = hrp:FindFirstChild("BF_ESP_Box")
+        if not bill then
+            bill = Instance.new("BillboardGui")
+            bill.Name = "BF_ESP_Box"
+            bill.Size = UDim2.new(0, 200, 0, 40)
+            bill.StudsOffset = Vector3.new(0, 3.5, 0)
+            bill.AlwaysOnTop = true
+            bill.Parent = hrp
+
+            local txt = Instance.new("TextLabel", bill)
+            txt.Name = "ESPText"
+            txt.Size = UDim2.new(1, 0, 1, 0)
+            txt.BackgroundTransparency = 1
+            txt.TextColor3 = Color3.fromRGB(255, 60, 60)
+            txt.TextStrokeTransparency = 0
+            txt.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            txt.TextSize = 13
+            txt.Font = Enum.Font.SourceSansBold
+            txt.Text = plr.DisplayName .. "\n[0m]"
         end
-
-        if v:IsA("PointLight") or v:IsA("SpotLight") or v:IsA("SurfaceLight") then
-            v.Enabled = false
-            v:Destroy()
-        end
-
-        if v:IsA("PostEffect") or v:IsA("BloomEffect") or v:IsA("BlurEffect") 
-        or v:IsA("ColorCorrectionEffect") or v:IsA("SunRaysEffect") 
-        or v:IsA("DepthOfFieldEffect") or v:IsA("Atmosphere") then
-            v.Enabled = false
-            v:Destroy()
-        end
-
-        if v:IsA("BasePart") then
-            local name = v.Name:lower()
-            local parentName = v.Parent and v.Parent.Name:lower() or ""
-
-            if name:find("effect") or name:find("particle") or name:find("skill") 
-            or name:find("haki") or name:find("aura") or name:find("blast") 
-            or name:find("slash") or name:find("bullet") or name:find("shot")
-            or parentName:find("effects") or parentName:find("haki") then
-                v.Transparency = 1
-                v.CastShadow = false
-                v.Size = Vector3.new(0,0,0)
-            else
-                v.Material = Enum.Material.SmoothPlastic
-                v.CastShadow = false
-                v.Reflectance = 0
-            end
-
-            if superFix then
-                if name:find("tree") or name:find("leaf") or name:find("grass") 
-                or name:find("rock") or name:find("bush") or name:find("wood") then
-                    v.Transparency = 1
-                end
-            end
-        end
-
-        if v:IsA("Decal") or v:IsA("Texture") then
-            v.Transparency = 1
-            v:Destroy()
-        end
-    end)
-end
-
--- Chế độ Siêu Cấp Fix Lag
-local function applySuperFix()
-    pcall(function()
-        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-        L.GlobalShadows = false
-        L.FogEnd = 9e9
-        L.Brightness = 1
-        
-        if superFix then
-            L.OutdoorAmbient = Color3.fromRGB(0, 0, 0)
-            for _, v in ipairs(L:GetChildren()) do
-                if v:IsA("Sky") then v:Destroy() end
-            end
-        end
-
-        local t = W:FindFirstChildOfClass("Terrain")
-        if t then
-            t.WaterWaveSize = 0
-            t.WaterWaveSpeed = 0
-            t.WaterReflectance = 0
-            t.WaterTransparency = 1
-            if superFix then t:Clear() end
-        end
-    end)
-
-    for _, obj in ipairs(W:GetDescendants()) do
-        purgeVFX(obj)
+    else
+        local bill = hrp:FindFirstChild("BF_ESP_Box")
+        if bill then bill:Destroy() end
     end
 end
 
-applySuperFix()
+local function refreshAllESP()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        updatePlayerESP(plr)
+    end
+end
 
-W.DescendantAdded:Connect(function(v)
-    task.defer(function() purgeVFX(v) end)
+-- Cập nhật khoảng cách ESP
+RunService.RenderStepped:Connect(function()
+    if not espActive then return end
+    local myChar = P.Character
+    local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= P and plr.Character then
+            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local bill = hrp:FindFirstChild("BF_ESP_Box")
+                if bill then
+                    local txt = bill:FindFirstChild("ESPText")
+                    if txt then
+                        local dist = myHrp and math.floor((hrp.Position - myHrp.Position).Magnitude) or 0
+                        txt.Text = string.format("%s\n[%dm]", plr.DisplayName, dist)
+                    end
+                else
+                    updatePlayerESP(plr)
+                end
+            end
+        end
+    end
 end)
 
-local function hookChar(char)
-    if not char then return end
-    char.DescendantAdded:Connect(function(v)
-        task.defer(function() purgeVFX(v) end)
+-- Hàm dọn VFX
+local function purgeVFX(v)
+    if not active or v.Name == "BF_ESP_Box" or v.Name == "BF_FPS_Counter" then return end
+    pcall(function()
+        if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Highlight") then
+            v.Enabled = false; v:Destroy()
+        elseif v:IsA("BasePart") then
+            if v.Name:lower():find("effect") or v.Name:lower():find("haki") then v.Transparency = 1; v.Size = Vector3.new(0,0,0)
+            else v.Material = Enum.Material.SmoothPlastic end
+            if superFix and (v.Name:lower():find("tree") or v.Name:lower():find("grass")) then v.Transparency = 1 end
+        end
     end)
 end
-if P.Character then hookChar(P.Character) end
-P.CharacterAdded:Connect(hookChar)
 
--- Sự kiện nút bấm
+-- Chức năng Siêu Fix Lag
+local function applySuperFix()
+    pcall(function()
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+        L.GlobalShadows = false; L.FogEnd = 9e9
+        local t = W:FindFirstChildOfClass("Terrain")
+        if t then t.WaterTransparency = 1; if superFix then t:Clear() end end
+    end)
+    for _, obj in ipairs(W:GetDescendants()) do purgeVFX(obj) end
+end
+
+-- Sự kiện bật tắt nút (Đã bổ sung đổi màu Xanh/Đỏ)
 btnNormal.MouseButton1Click:Connect(function()
     active = not active
-    btnNormal.Text = "1. XÓA VFX VÕ,TRÁI,SÚNG,HAKI: " .. (active and "BẬT" or "TẮT")
+    btnNormal.Text = "XÓA VFX: " .. (active and "BẬT" or "TẮT")
     btnNormal.BackgroundColor3 = active and Color3.fromRGB(35, 130, 60) or Color3.fromRGB(140, 40, 40)
     if active then applySuperFix() end
 end)
 
 btnSuper.MouseButton1Click:Connect(function()
     superFix = not superFix
-    btnSuper.Text = "2. ⚡ SIÊU CẤP FIX LAG: " .. (superFix and "BẬT" or "TẮT")
+    btnSuper.Text = "SIÊU FIX LAG: " .. (superFix and "BẬT" or "TẮT")
     btnSuper.BackgroundColor3 = superFix and Color3.fromRGB(35, 130, 60) or Color3.fromRGB(140, 40, 40)
     applySuperFix()
+end)
+
+btnESP.MouseButton1Click:Connect(function()
+    espActive = not espActive
+    btnESP.Text = "ESP NGƯỜI CHƠI: " .. (espActive and "BẬT" or "TẮT")
+    btnESP.BackgroundColor3 = espActive and Color3.fromRGB(35, 130, 60) or Color3.fromRGB(140, 40, 40)
+    refreshAllESP()
 end)
 
 F.MouseButton1Click:Connect(function() M.Visible = not M.Visible end)
 X.MouseButton1Click:Connect(function() M.Visible = false end)
 
-print("⚡ FIX LAG V1!")
+W.DescendantAdded:Connect(function(v) task.defer(function() purgeVFX(v) end) end)
+
+print("⚡ FIXED SCRIPT READY!")
