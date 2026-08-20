@@ -114,8 +114,8 @@ local function createBtn(text, y, color)
     return b
 end
 
-local btnNormal = createBtn("1. XÓA VFX VÕ, TRÁI, SÚNG, HAKI : BẬT", 45, Color3.fromRGB(35, 130, 60))
-local btnSuper = createBtn("2. ⚡ SIÊU CẤP FIX LAG (VOID MODE) : TẮT", 93, Color3.fromRGB(140, 40, 40))
+local btnNormal = createBtn("1. XÓA VFX VÕ,TRÁI,SÚNG,HAKI: BẬT", 45, Color3.fromRGB(35, 130, 60))
+local btnSuper = createBtn("2. ⚡ SIÊU CẤP FIX LAG: TẮT", 93, Color3.fromRGB(140, 40, 40))
 
 -- Hàm diệt sạch VFX Võ, Trái, Súng, Haki
 local function purgeVFX(v)
@@ -220,14 +220,14 @@ P.CharacterAdded:Connect(hookChar)
 -- Sự kiện nút bấm
 btnNormal.MouseButton1Click:Connect(function()
     active = not active
-    btnNormal.Text = "1. XÓA VFX VÕ, TRÁI, SÚNG, HAKI : " .. (active and "BẬT" or "TẮT")
+    btnNormal.Text = "1. XÓA VFX VÕ,TRÁI,SÚNG,HAKI: " .. (active and "BẬT" or "TẮT")
     btnNormal.BackgroundColor3 = active and Color3.fromRGB(35, 130, 60) or Color3.fromRGB(140, 40, 40)
     if active then applySuperFix() end
 end)
 
 btnSuper.MouseButton1Click:Connect(function()
     superFix = not superFix
-    btnSuper.Text = "2. ⚡ SIÊU CẤP FIX LAG (VOID MODE) : " .. (superFix and "BẬT" or "TẮT")
+    btnSuper.Text = "2. ⚡ SIÊU CẤP FIX LAG: " .. (superFix and "BẬT" or "TẮT")
     btnSuper.BackgroundColor3 = superFix and Color3.fromRGB(35, 130, 60) or Color3.fromRGB(140, 40, 40)
     applySuperFix()
 end)
