@@ -1,4 +1,4 @@
---// Blox Fruits FPS Ultra MAX + ESP Name/Distance + FPS Counter (Fixed)
+--// Blox Fruits Hub (Phần 1/3)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local P = Players.LocalPlayer
@@ -11,31 +11,63 @@ local CG = game:GetService("CoreGui")
 local active = true
 local superFix = false
 local espActive = false
+local islandEspActive = false
 
--- Khởi tạo GUI an toàn Delta
 local G = Instance.new("ScreenGui")
-G.Name = "BF_SuperFixLag_Delta"
+G.Name = "BF_MaruHub_FixLag"
 G.ResetOnSpawn = false
-pcall(function() if gethui then G.Parent = gethui() elseif CG then G.Parent = CG else G.Parent = PG end end)
+pcall(function() 
+    if gethui then G.Parent = gethui() 
+    elseif CG then G.Parent = CG 
+    else G.Parent = PG end 
+end)
 
 local function corner(x, r)
     local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, r or 8)
+    c.CornerRadius = UDim.new(0, r or 10)
     c.Parent = x
 end
 
--- Bảng FPS ở sát góc trên bên phải (Đã xóa sét & đẩy cao)
+local function redBorder(x, thickness)
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255, 45, 45)
+    stroke.Thickness = thickness or 1.5
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Parent = x
+end
+
+local function makeDraggable(gui)
+    local dragging, dragInput, dragStart, startPos
+    gui.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true; dragStart = input.Position; startPos = gui.Position
+            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+        end
+    end)
+    gui.InputChanged:Connect(function(input) 
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then 
+            dragInput = input 
+        end 
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
 local FPSLabel = Instance.new("TextLabel", G)
 FPSLabel.Name = "BF_FPS_Counter"
-FPSLabel.Size = UDim2.fromOffset(85, 22)
-FPSLabel.Position = UDim2.new(1, -95, 0, 2)
-FPSLabel.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-FPSLabel.BackgroundTransparency = 0.3
+FPSLabel.Size = UDim2.fromOffset(80, 24)
+FPSLabel.Position = UDim2.new(1, -90, 0, 8)
+FPSLabel.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
 FPSLabel.TextColor3 = Color3.fromRGB(0, 255, 128)
 FPSLabel.TextSize = 12
 FPSLabel.Font = Enum.Font.SourceSansBold
 FPSLabel.Text = "FPS: ..."
-corner(FPSLabel, 6)
+corner(FPSLabel, 8)
+redBorder(FPSLabel, 1.5)
 
 local frameCount = 0
 local lastCheck = os.clock()
@@ -50,63 +82,312 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Hệ thống kéo thả
-local function makeDraggable(gui)
-    local dragging, dragInput, dragStart, startPos
-    gui.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true; dragStart = input.Position; startPos = gui.Position
-            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+local OpenBtn = Instance.new("TextButton", G)
+OpenBtn.Size = UDim2.fromOffset(80, 32)
+OpenBtn.Position = UDim2.new(0, 15, 0.4, 0)
+OpenBtn.Text = "FIX LAG"
+OpenBtn.TextSize = 13
+OpenBtn.Font = Enum.Font.SourceSansBold
+OpenBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
+OpenBtn.TextColor3 = Color3.fromRGB(0, 220, 255)
+corner(OpenBtn, 8)
+redBorder(OpenBtn, 2)
+makeDraggable(OpenBtn)
+
+local Main = Instance.new("Frame", G)
+Main.Size = UDim2.fromOffset(550, 340)
+Main.Position = UDim2.new(0.5, -275, 0.5, -170)
+Main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Main.BorderSizePixel = 0
+Main.ClipsDescendants = false
+Main.Visible = false
+corner(Main, 12) 
+redBorder(Main, 2)
+makeDraggable(Main)
+
+local Header = Instance.new("Frame", Main)
+Header.Size = UDim2.new(1, 0, 0, 40)
+Header.BackgroundTransparency = 1
+Header.BorderSizePixel = 0
+
+local HeaderLine = Instance.new("Frame", Header)
+HeaderLine.Size = UDim2.new(1, 0, 0, 1)
+HeaderLine.Position = UDim2.new(0, 0, 1, -1)
+HeaderLine.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+HeaderLine.BorderSizePixel = 0
+
+local Title = Instance.new("TextLabel", Header)
+Title.Size = UDim2.new(1, -50, 1, 0)
+Title.Position = UDim2.fromOffset(15, 0)
+Title.Text = "Fix Lag  <font color=\"rgb(255,60,60)\">[ Blox Fruits ]</font>"
+Title.RichText = true
+Title.TextSize = 14
+Title.Font = Enum.Font.SourceSansBold
+Title.TextColor3 = Color3.fromRGB(240, 240, 240)
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.BackgroundTransparency = 1
+
+local CloseBtn = Instance.new("TextButton", Header)
+CloseBtn.Size = UDim2.fromOffset(26, 26)
+CloseBtn.Position = UDim2.new(1, -34, 0, 7)
+CloseBtn.Text = "✕"
+CloseBtn.TextSize = 14
+CloseBtn.Font = Enum.Font.SourceSansBold
+CloseBtn.TextColor3 = Color3.fromRGB(255, 60, 60)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+corner(CloseBtn, 8)
+redBorder(CloseBtn, 1)
+
+CloseBtn.MouseButton1Click:Connect(function() Main.Visible = false end)
+OpenBtn.MouseButton1Click:Connect(function() Main.Visible = not Main.Visible end)
+--// Blox Fruits Hub (Phần 2/3)
+local Sidebar = Instance.new("Frame", Main)
+Sidebar.Size = UDim2.new(0, 145, 1, -40)
+Sidebar.Position = UDim2.fromOffset(0, 40)
+Sidebar.BackgroundTransparency = 1
+Sidebar.BorderSizePixel = 0
+
+local SidebarLine = Instance.new("Frame", Sidebar)
+SidebarLine.Size = UDim2.new(0, 1, 1, 0)
+SidebarLine.Position = UDim2.new(1, -1, 0, 0)
+SidebarLine.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+SidebarLine.BorderSizePixel = 0
+
+local SearchBox = Instance.new("TextBox", Sidebar)
+SearchBox.Size = UDim2.new(1, -16, 0, 28)
+SearchBox.Position = UDim2.fromOffset(8, 8)
+SearchBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+SearchBox.Text = ""
+SearchBox.PlaceholderText = "Search..."
+SearchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+SearchBox.TextColor3 = Color3.fromRGB(220, 220, 220)
+SearchBox.TextSize = 12
+SearchBox.Font = Enum.Font.SourceSans
+corner(SearchBox, 6)
+redBorder(SearchBox, 1)
+
+local TabContainer = Instance.new("Frame", Sidebar)
+TabContainer.Size = UDim2.new(1, 0, 1, -44)
+TabContainer.Position = UDim2.fromOffset(0, 44)
+TabContainer.BackgroundTransparency = 1
+
+local TabList = Instance.new("UIListLayout", TabContainer)
+TabList.SortOrder = Enum.SortOrder.LayoutOrder
+TabList.Padding = UDim.new(0, 6)
+
+local tabPadding = Instance.new("UIPadding", TabContainer)
+tabPadding.PaddingLeft = UDim.new(0, 8)
+tabPadding.PaddingRight = UDim.new(0, 8)
+tabPadding.PaddingTop = UDim.new(0, 4)
+
+local ContentArea = Instance.new("Frame", Main)
+ContentArea.Size = UDim2.new(1, -145, 1, -40)
+ContentArea.Position = UDim2.fromOffset(145, 40)
+ContentArea.BackgroundTransparency = 1
+
+local tabs = {}
+
+local function createTab(name, order)
+    local tabBtn = Instance.new("TextButton", TabContainer)
+    tabBtn.Size = UDim2.new(1, 0, 0, 30)
+    tabBtn.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+    tabBtn.Text = name
+    tabBtn.TextSize = 13
+    tabBtn.Font = Enum.Font.SourceSansBold
+    tabBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    tabBtn.TextXAlignment = Enum.TextXAlignment.Left
+    tabBtn.LayoutOrder = order
+    corner(tabBtn, 6)
+    redBorder(tabBtn, 1)
+
+    local btnPadding = Instance.new("UIPadding", tabBtn)
+    btnPadding.PaddingLeft = UDim.new(0, 12)
+
+    local indicator = Instance.new("Frame", tabBtn)
+    indicator.Size = UDim2.new(0, 3, 0.6, 0)
+    indicator.Position = UDim2.new(0, -10, 0.2, 0)
+    indicator.BackgroundColor3 = Color3.fromRGB(255, 45, 45)
+    indicator.Visible = false
+    corner(indicator, 2)
+
+    local scroll = Instance.new("ScrollingFrame", ContentArea)
+    scroll.Size = UDim2.new(1, 0, 1, 0)
+    scroll.BackgroundTransparency = 1
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 3
+    scroll.ScrollBarImageColor3 = Color3.fromRGB(255, 60, 60)
+    scroll.Visible = false
+    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y -- [QUAN TRỌNG] Tự động giãn khung cuộn theo nội dung bên trong
+
+    local layout = Instance.new("UIListLayout", scroll)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 10)
+
+    local padding = Instance.new("UIPadding", scroll)
+    padding.PaddingTop = UDim.new(0, 12)
+    padding.PaddingLeft = UDim.new(0, 14)
+    padding.PaddingRight = UDim.new(0, 14)
+    padding.PaddingBottom = UDim.new(0, 12)
+
+    tabs[name] = {btn = tabBtn, ind = indicator, scroll = scroll}
+
+    tabBtn.MouseButton1Click:Connect(function()
+        for tName, data in pairs(tabs) do
+            data.btn.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+            data.btn.TextColor3 = Color3.fromRGB(150, 150, 150)
+            data.ind.Visible = false
+            data.scroll.Visible = false
         end
+        tabBtn.BackgroundColor3 = Color3.fromRGB(40, 20, 20)
+        tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        indicator.Visible = true
+        scroll.Visible = true
     end)
-    gui.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end end)
-    UIS.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+
+    return scroll
+end
+
+local mainScroll = createTab("Main", 1)
+local espScroll = createTab("ESP / Visual", 2)
+local scriptScroll = createTab("Scripts", 3)
+
+tabs["Main"].btn.BackgroundColor3 = Color3.fromRGB(40, 20, 20)
+tabs["Main"].btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+tabs["Main"].ind.Visible = true
+tabs["Main"].scroll.Visible = true
+
+local function createSectionTitle(parent, text)
+    local lbl = Instance.new("TextLabel", parent)
+    lbl.Size = UDim2.new(1, 0, 0, 22)
+    lbl.Text = text
+    lbl.TextSize = 15
+    lbl.Font = Enum.Font.SourceSansBold
+    lbl.TextColor3 = Color3.fromRGB(255, 100, 100)
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.BackgroundTransparency = 1
+end
+
+local function createToggleCard(parent, titleText, descText, initialValue, callback)
+    local Card = Instance.new("Frame", parent)
+    Card.Size = UDim2.new(1, 0, 0, 60)
+    Card.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    Card.BorderSizePixel = 0
+    corner(Card, 10)
+    redBorder(Card, 1.5)
+
+    local Title = Instance.new("TextLabel", Card)
+    Title.Size = UDim2.new(1, -70, 0, 20)
+    Title.Position = UDim2.fromOffset(12, 10)
+    Title.Text = titleText
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.Font = Enum.Font.SourceSansBold
+    Title.TextSize = 14
+    Title.BackgroundTransparency = 1
+
+    local Desc = Instance.new("TextLabel", Card)
+    Desc.Size = UDim2.new(1, -70, 0, 18)
+    Desc.Position = UDim2.fromOffset(12, 32)
+    Desc.Text = descText
+    Desc.TextColor3 = Color3.fromRGB(170, 170, 170)
+    Desc.TextXAlignment = Enum.TextXAlignment.Left
+    Desc.Font = Enum.Font.SourceSans
+    Desc.TextSize = 12
+    Desc.BackgroundTransparency = 1
+
+    local Switch = Instance.new("TextButton", Card)
+    Switch.Size = UDim2.fromOffset(42, 22)
+    Switch.Position = UDim2.new(1, -52, 0.5, -11)
+    Switch.Text = ""
+    Switch.BackgroundColor3 = initialValue and Color3.fromRGB(255, 45, 45) or Color3.fromRGB(60, 60, 60)
+    corner(Switch, 11)
+    redBorder(Switch, 1.5)
+
+    local Knob = Instance.new("Frame", Switch)
+    Knob.Size = UDim2.fromOffset(16, 16)
+    Knob.Position = initialValue and UDim2.fromOffset(23, 3) or UDim2.fromOffset(3, 3)
+    Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    corner(Knob, 8)
+
+    local state = initialValue
+    Switch.MouseButton1Click:Connect(function()
+        state = not state
+        if state then
+            Switch.BackgroundColor3 = Color3.fromRGB(255, 45, 45)
+            Knob:TweenPosition(UDim2.fromOffset(23, 3), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.12, true)
+        else
+            Switch.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            Knob:TweenPosition(UDim2.fromOffset(3, 3), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.12, true)
         end
+        callback(state)
     end)
 end
 
--- UI Menu
-local F = Instance.new("TextButton", G)
-F.Size = UDim2.fromOffset(55, 55); F.Position = UDim2.new(0, 15, 0.5, -27); F.Text = "⚡"; F.TextSize = 26; F.BackgroundColor3 = Color3.fromRGB(20, 20, 20); F.TextColor3 = Color3.fromRGB(0, 255, 128); corner(F, 12); makeDraggable(F)
+local function createCopyCard(parent, titleText, descText, copyString)
+    local Card = Instance.new("Frame", parent)
+    Card.Size = UDim2.new(1, 0, 0, 60)
+    Card.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    Card.BorderSizePixel = 0
+    corner(Card, 10)
+    redBorder(Card, 1.5)
 
-local M = Instance.new("Frame", G)
-M.Size = UDim2.fromOffset(320, 195); M.Position = UDim2.new(0, 75, 0.5, -97); M.BackgroundColor3 = Color3.fromRGB(15, 15, 15); M.Visible = false; corner(M, 10); makeDraggable(M)
+    local Title = Instance.new("TextLabel", Card)
+    Title.Size = UDim2.new(1, -95, 0, 20)
+    Title.Position = UDim2.fromOffset(12, 10)
+    Title.Text = titleText
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.Font = Enum.Font.SourceSansBold
+    Title.TextSize = 14
+    Title.BackgroundTransparency = 1
 
-local T = Instance.new("TextLabel", M)
-T.Size = UDim2.new(1, -45, 0, 38)
-T.Position = UDim2.fromOffset(12, 0)
-T.Text = "⚡ FIX LAG & ESP V2"
-T.TextSize = 13
-T.Font = Enum.Font.SourceSansBold
-T.TextColor3 = Color3.fromRGB(0, 255, 150)
-T.TextXAlignment = Enum.TextXAlignment.Left
-T.BackgroundTransparency = 1
+    local Desc = Instance.new("TextLabel", Card)
+    Desc.Size = UDim2.new(1, -95, 0, 18)
+    Desc.Position = UDim2.fromOffset(12, 32)
+    Desc.Text = descText
+    Desc.TextColor3 = Color3.fromRGB(170, 170, 170)
+    Desc.TextXAlignment = Enum.TextXAlignment.Left
+    Desc.Font = Enum.Font.SourceSans
+    Desc.TextSize = 12
+    Desc.BackgroundTransparency = 1
+    Desc.TextTruncate = Enum.TextTruncate.AtEnd
 
-local X = Instance.new("TextButton", M)
-X.Size = UDim2.fromOffset(30, 30)
-X.Position = UDim2.new(1, -35, 0, 4)
-X.Text = "✕"
-X.TextSize = 16
-X.Font = Enum.Font.SourceSansBold
-X.TextColor3 = Color3.new(1, 1, 1)
-X.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-corner(X, 6)
+    local CopyBtn = Instance.new("TextButton", Card)
+    CopyBtn.Size = UDim2.fromOffset(65, 26)
+    CopyBtn.Position = UDim2.new(1, -77, 0.5, -13)
+    CopyBtn.Text = "Copy"
+    CopyBtn.Font = Enum.Font.SourceSansBold
+    CopyBtn.TextSize = 13
+    CopyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CopyBtn.BackgroundColor3 = Color3.fromRGB(255, 45, 45)
+    corner(CopyBtn, 6)
+    redBorder(CopyBtn, 1)
 
-local function createBtn(text, y, color)
-    local b = Instance.new("TextButton", M)
-    b.Size = UDim2.new(1, -16, 0, 40); b.Position = UDim2.fromOffset(8, y); b.Text = text; b.TextSize = 11; b.Font = Enum.Font.SourceSansBold; b.TextColor3 = Color3.new(1, 1, 1); b.BackgroundColor3 = color; corner(b, 6)
-    return b
+    CopyBtn.MouseButton1Click:Connect(function()
+        if setclipboard then
+            setclipboard(copyString)
+            CopyBtn.Text = "Copied!"
+            CopyBtn.BackgroundColor3 = Color3.fromRGB(60, 200, 60)
+            task.delay(1, function()
+                CopyBtn.Text = "Copy"
+                CopyBtn.BackgroundColor3 = Color3.fromRGB(255, 45, 45)
+            end)
+        else
+            CopyBtn.Text = "Error"
+            task.delay(1, function() CopyBtn.Text = "Copy" end)
+        end
+    end)
+end
+--// Blox Fruits Hub (Phần 3/3)
+local function getLocationsFolder()
+    if W:FindFirstChild("Locations") then
+        return W.Locations
+    elseif W:FindFirstChild("_WorldOrigin") and W._WorldOrigin:FindFirstChild("Locations") then
+        return W._WorldOrigin.Locations
+    end
+    return nil
 end
 
--- Tạo các nút bấm không có số 1, 2, 3
-local btnNormal = createBtn("XÓA VFX: BẬT", 45, Color3.fromRGB(35, 130, 60))
-local btnSuper = createBtn("SIÊU FIX LAG: TẮT", 93, Color3.fromRGB(140, 40, 40))
-local btnESP = createBtn("ESP NGƯỜI CHƠI: TẮT", 141, Color3.fromRGB(140, 40, 40))
-
--- Logic ESP Hiển Thị Tên + Khoảng Cách
 local function updatePlayerESP(plr)
     if plr == P or not plr.Character then return end
     local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
@@ -139,52 +420,119 @@ local function updatePlayerESP(plr)
     end
 end
 
-local function refreshAllESP()
-    for _, plr in ipairs(Players:GetPlayers()) do
-        updatePlayerESP(plr)
+local function updateIslandESP()
+    local locFolder = getLocationsFolder()
+    if not locFolder then return end
+
+    for _, loc in ipairs(locFolder:GetChildren()) do
+        local targetPart = loc:IsA("BasePart") and loc or (loc:IsA("Model") and (loc.PrimaryPart or loc:FindFirstChildWhichIsA("BasePart")))
+        if targetPart then
+            local bill = targetPart:FindFirstChild("BF_Island_ESP")
+            if islandEspActive then
+                if not bill then
+                    bill = Instance.new("BillboardGui")
+                    bill.Name = "BF_Island_ESP"
+                    bill.Size = UDim2.new(0, 200, 0, 40)
+                    bill.StudsOffset = Vector3.new(0, 10, 0)
+                    bill.AlwaysOnTop = true
+                    bill.Parent = targetPart
+
+                    local txt = Instance.new("TextLabel", bill)
+                    txt.Name = "ESPText"
+                    txt.Size = UDim2.new(1, 0, 1, 0)
+                    txt.BackgroundTransparency = 1
+                    txt.TextColor3 = Color3.fromRGB(255, 60, 60)
+                    txt.TextStrokeTransparency = 0
+                    txt.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+                    txt.TextSize = 13
+                    txt.Font = Enum.Font.SourceSansBold
+                    txt.Text = loc.Name .. "\n[0m]"
+                end
+            else
+                if bill then bill:Destroy() end
+            end
+        end
     end
 end
 
--- Cập nhật khoảng cách ESP
+local function refreshAllESP()
+    for _, plr in ipairs(Players:GetPlayers()) do updatePlayerESP(plr) end
+    updateIslandESP()
+end
+
 RunService.RenderStepped:Connect(function()
-    if not espActive then return end
     local myChar = P.Character
     local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
 
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= P and plr.Character then
-            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                local bill = hrp:FindFirstChild("BF_ESP_Box")
-                if bill then
-                    local txt = bill:FindFirstChild("ESPText")
-                    if txt then
-                        local dist = myHrp and math.floor((hrp.Position - myHrp.Position).Magnitude) or 0
-                        txt.Text = string.format("%s\n[%dm]", plr.DisplayName, dist)
+    if espActive and myHrp then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= P and plr.Character then
+                local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local bill = hrp:FindFirstChild("BF_ESP_Box")
+                    if bill then
+                        local txt = bill:FindFirstChild("ESPText")
+                        if txt then
+                            local dist = math.floor((hrp.Position - myHrp.Position).Magnitude)
+                            txt.Text = string.format("%s\n[%dm]", plr.DisplayName, dist)
+                        end
+                    else
+                        updatePlayerESP(plr)
                     end
-                else
-                    updatePlayerESP(plr)
+                end
+            end
+        end
+    end
+
+    if islandEspActive and myHrp then
+        local locFolder = getLocationsFolder()
+        if locFolder then
+            for _, loc in ipairs(locFolder:GetChildren()) do
+                local targetPart = loc:IsA("BasePart") and loc or (loc:IsA("Model") and (loc.PrimaryPart or loc:FindFirstChildWhichIsA("BasePart")))
+                if targetPart then
+                    local bill = targetPart:FindFirstChild("BF_Island_ESP")
+                    if bill then
+                        local txt = bill:FindFirstChild("ESPText")
+                        if txt then
+                            local dist = math.floor((targetPart.Position - myHrp.Position).Magnitude)
+                            txt.Text = string.format("%s\n[%dm]", loc.Name, dist)
+                        end
+                    else
+                        updateIslandESP()
+                    end
                 end
             end
         end
     end
 end)
 
--- Hàm dọn VFX
 local function purgeVFX(v)
-    if not active or v.Name == "BF_ESP_Box" or v.Name == "BF_FPS_Counter" then return end
+    if not active or v.Name == "BF_ESP_Box" or v.Name == "BF_Island_ESP" or v.Name == "BF_FPS_Counter" then return end
     pcall(function()
         if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Highlight") then
             v.Enabled = false; v:Destroy()
         elseif v:IsA("BasePart") then
-            if v.Name:lower():find("effect") or v.Name:lower():find("haki") then v.Transparency = 1; v.Size = Vector3.new(0,0,0)
-            else v.Material = Enum.Material.SmoothPlastic end
-            if superFix and (v.Name:lower():find("tree") or v.Name:lower():find("grass")) then v.Transparency = 1 end
+            local n = v.Name:lower()
+            local pName = v.Parent and v.Parent.Name:lower() or ""
+
+            if n:find("effect") or n:find("haki") or pName:find("effect") then 
+                v.Transparency = 1; v.Size = Vector3.new(0,0,0)
+            else 
+                v.Material = Enum.Material.SmoothPlastic 
+            end
+
+            if superFix then
+                if n:find("tree") or n:find("leaf") or n:find("leaves") or n:find("trunk") 
+                or n:find("branch") or n:find("wood") or n:find("bush") or n:find("grass") 
+                or n:find("foliage") or n:find("plant") or n:find("rock")
+                or pName:find("tree") or pName:find("plant") then
+                    v.Transparency = 1
+                end
+            end
         end
     end)
 end
 
--- Chức năng Siêu Fix Lag
 local function applySuperFix()
     pcall(function()
         settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
@@ -195,31 +543,96 @@ local function applySuperFix()
     for _, obj in ipairs(W:GetDescendants()) do purgeVFX(obj) end
 end
 
--- Sự kiện bật tắt nút (Đã bổ sung đổi màu Xanh/Đỏ)
-btnNormal.MouseButton1Click:Connect(function()
-    active = not active
-    btnNormal.Text = "XÓA VFX: " .. (active and "BẬT" or "TẮT")
-    btnNormal.BackgroundColor3 = active and Color3.fromRGB(35, 130, 60) or Color3.fromRGB(140, 40, 40)
+-- Đưa các tính năng vào Tab
+createSectionTitle(mainScroll, "Optimization")
+createToggleCard(mainScroll, "Xóa VFX", "Dọn dẹp hiệu ứng kỹ năng và hạt chiêu thức để tăng FPS.", active, function(v)
+    active = v
     if active then applySuperFix() end
 end)
-
-btnSuper.MouseButton1Click:Connect(function()
-    superFix = not superFix
-    btnSuper.Text = "SIÊU FIX LAG: " .. (superFix and "BẬT" or "TẮT")
-    btnSuper.BackgroundColor3 = superFix and Color3.fromRGB(35, 130, 60) or Color3.fromRGB(140, 40, 40)
+createToggleCard(mainScroll, "Siêu Fix Lag", "Giảm đồ họa xuống mức thấp nhất, ẩn cây cối và hiệu ứng nước.", superFix, function(v)
+    superFix = v
     applySuperFix()
 end)
 
-btnESP.MouseButton1Click:Connect(function()
-    espActive = not espActive
-    btnESP.Text = "ESP NGƯỜI CHƠI: " .. (espActive and "BẬT" or "TẮT")
-    btnESP.BackgroundColor3 = espActive and Color3.fromRGB(35, 130, 60) or Color3.fromRGB(140, 40, 40)
+createSectionTitle(espScroll, "Visuals")
+createToggleCard(espScroll, "ESP Người Chơi", "Hiển thị tên và khoảng cách đến người chơi khác.", espActive, function(v)
+    espActive = v
     refreshAllESP()
 end)
+createToggleCard(espScroll, "ESP Đảo", "Hiển thị tên và khoảng cách đến các đảo (không icon).", islandEspActive, function(v)
+    islandEspActive = v
+    updateIslandESP()
+end)
 
-F.MouseButton1Click:Connect(function() M.Visible = not M.Visible end)
-X.MouseButton1Click:Connect(function() M.Visible = false end)
+-- Tab Scripts (Đầy đủ tất cả các script đã thêm)
+createSectionTitle(scriptScroll, "Blox Fruits Scripts")
+createCopyCard(
+    scriptScroll, 
+    "QuantumOnyx", 
+    "Nhấn Copy để lấy Loadstring QuantumOnyx", 
+    'loadstring(game:HttpGet("https://raw.githubusercontent.com/flazhy/QuantumOnyx/refs/heads/main/QuantumOnyx.lua"))()'
+)
+createCopyCard(
+    scriptScroll, 
+    "Banana Hud Fake", 
+    "Nhấn Copy để lấy Loadstring Banana Hud Fake", 
+    'loadstring(game:HttpGet("https://raw.githubusercontent.com/aloaloalo322/sssdas/refs/heads/main/cc"))()'
+)
+createCopyCard(
+    scriptScroll, 
+    "MeoLazy", 
+    "Nhấn Copy để lấy Loadstring MeoLazy V1", 
+    'loadstring(game:HttpGet("https://raw.githubusercontent.com/MeoLazy/Script/refs/heads/main/V1.lua"))()'
+)
+createCopyCard(
+    scriptScroll, 
+    "Realkid Hub", 
+    "Nhấn Copy để lấy Loadstring Realkid Hub", 
+    'loadstring(game:HttpGet("https://raw.githubusercontent.com/realkidhub/realkid/refs/heads/main/main.lua"))()'
+)
+createCopyCard(
+    scriptScroll, 
+    "Neva Hub", 
+    "Nhấn Copy để lấy Loadstring Neva Hub", 
+    'loadstring(game:HttpGet("https://raw.githubusercontent.com/VEZ2/NEVAHUB/main/2"))()'
+)
+createCopyCard(
+    scriptScroll, 
+    "Speed Hub X", 
+    "Nhấn Copy để lấy Loadstring Speed Hub X", 
+    'loadstring(game:HttpGet("https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua", true))()'
+)
+createCopyCard(
+    scriptScroll, 
+    "W Azeox", 
+    "Nhấn Copy để lấy Loadstring W Azeox", 
+    'loadstring(game:HttpGet("https://raw.githubusercontent.com/ru-3/W-Azeox/refs/heads/main/scripts/Bloxfruit.lua"))()'
+)
+createCopyCard(
+    scriptScroll, 
+    "Redz Hud", 
+    "Nhấn Copy để lấy Loadstring Redz Hud", 
+    'loadstring(game:HttpGet("https://raw.githubusercontent.com/fakekuri/idk-hub/refs/heads/main/RedzHub.luau"))()'
+)
+createCopyCard(
+    scriptScroll, 
+    "Teddy Hud", 
+    "Nhấn Copy để lấy Loadstring Teddy Hud", 
+    'repeat task.wait() until game:IsLoaded() and game:GetService("Players") and game.Players.LocalPlayer and game.Players.LocalPlayer:FindFirstChild("PlayerGui") loadstring(game:HttpGet("https://raw.githubusercontent.com/Teddyseetink/Haidepzai/refs/heads/main/TeddyHub.lua"))()'
+)
+createCopyCard(
+    scriptScroll, 
+    "Xero Hud", 
+    "Nhấn Copy để lấy Loadstring Xero Hud", 
+    'getgenv().Team = "Marines" getgenv().Hide_Menu = false getgenv().Auto_Execute = false loadstring(game:HttpGet("https://raw.githubusercontent.com/Xero2409/XeroHub/refs/heads/main/main.lua"))()'
+)
+createCopyCard(
+    scriptScroll, 
+    "Dacksoul Hud", 
+    "Nhấn Copy để lấy Loadstring Dacksoul Hud", 
+    'loadstring(game:HttpGet("https://raw.githubusercontent.com/gamer8410/dont-see-/refs/heads/main/loader.lua"))()'
+)
 
 W.DescendantAdded:Connect(function(v) task.defer(function() purgeVFX(v) end) end)
 
-print("⚡ FIXED SCRIPT READY!")
+print("FIX LAG UI LOADED SUCCESS!")
